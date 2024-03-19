@@ -1,3 +1,6 @@
 .vscode/
 average-execution-time/query*
 average-execution-time/query_results.csv
+
+average-execution-time/configs.sh
+postgres-db-port-forward/declarative-api*

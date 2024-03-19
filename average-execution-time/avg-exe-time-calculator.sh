@@ -20,6 +20,7 @@ execute_query() {
     local result=$(psql -h ${HOST} -p ${PORT} -U ${USERNAME} -d ${DATABASE} -c "\timing" -c "explain analyze $query")
     local execution_time=$(echo "$result" | grep "Execution Time:" | awk '{print $3}')
     local total_times=$(echo "$result" | grep -oE 'Time: [0-9.]+ ms' | awk '{print $2}')
+    # Execute the SQL query
     local total_time=$(echo "$total_times" | awk 'NR==3{print $1}')
     echo "$execution_time, $total_time"
 }
@@ -32,7 +33,7 @@ main() {
     local sum_execution_time=0
     local sum_total_time=0
 
-    for ((i = 1; i <= iterations; i ++)); do
+    for i in $(seq "$iterations"); do
         echo "Executing query iteration $i..."
         if [ $query_type = 'insert' ]; then
             result=$(execute_insert_query)
@@ -75,14 +76,26 @@ main() {
         index_definition=$(echo "$index_info" | awk 'NR==3 { for (i=3; i<=NF; i++) printf "%s ", $i; printf "\n" }')
     fi
 
+    # DB Size
+    echo "Get table size from the database..."
+    local table_size
+    table_size=$(PGPASSWORD=PLJ3C7ncRF4USZ+QElxQkQ psql -h ${HOST} -p ${PORT} -U ${USERNAME} -d ${DATABASE} -c "SELECT pg_size_pretty( pg_total_relation_size('kind') );")
+    local size
+    size=$(echo "$table_size" | awk 'NR==3 { for (i=1; i<=NF; i++) printf "%s ", $i; printf "\n" }')
 
+    local queried_row_count=0
+    if [ $query_type = 'select' ]; then 
+        result=$(psql -h "${HOST}" -p "${PORT}" -U "${USERNAME}" -d "${DATABASE}" -c "$query")
+        queried_row_count=$(echo "$result" | awk 'BEGIN {count=0} NR > 2 {count++} END {print count}')
+        queried_row_count=$((queried_row_count - 1))  # Subtract 1
+    fi
     # Write results to CSV file
     current_timestamp=$(date +"%Y-%m-%d %H:%M:%S")
     if [ -f "$CSV_FILE" ]; then
-        echo "$query_type, $query_name,$row_count,$row_count_millions,  \"$index_name\", $average_total_time,$average_execution_time,\"$query\",\"$has_indexes\", \"$index_definition\", $iterations, $current_timestamp" >> "$CSV_FILE"
+        echo "$query_type, $query_name,$row_count,$row_count_millions,  \"$index_name\", $average_total_time,$average_execution_time,\"$query\",\"$has_indexes\", \"$index_definition\", $iterations, $current_timestamp, $queried_row_count, $size"  >> "$CSV_FILE"
     else
-        echo "Query Type, Query Name,Row Count,Row Count (Millions), Index Name, Average Total Time (ms),Average Execution Time (ms),Query,Has Indexes, Index Definition,Sample Count, Current Timestamp" > "$CSV_FILE"
-        echo "$query_type, $query_name,$row_count,$row_count_millions,  \"$index_name\", $average_total_time,$average_execution_time,\"$query\",\"$has_indexes\", \"$index_definition\", $iterations, $current_timestamp" >> "$CSV_FILE"
+        echo "Query Type, Query Name,Row Count,Row Count (Millions), Index Name, Average Total Time (ms),Average Execution Time (ms),Query,Has Indexes, Index Definition,Sample Count, Current Timestamp, Queried Row Count, Table Size" > "$CSV_FILE"
+        echo "$query_type, $query_name,$row_count,$row_count_millions,  \"$index_name\", $average_total_time,$average_execution_time,\"$query\",\"$has_indexes\", \"$index_definition\", $iterations, $current_timestamp, $queried_row_count, $size" >> "$CSV_FILE"
     fi
     echo "Results written to $CSV_FILE"
 }
@@ -96,3 +109,5 @@ if [ "$#" -ne 3 ]; then
 fi
 
 main "$1" "$2" "$3"
+
+postgres=# SELECT tablename, pg_size_pretty(pg_total_relation_size(tablename)) AS total, pg_size_pretty(pg_relation_size(tablename)) AS table, pg_size_pretty(pg_indexes_size(tablename)) AS index FROM (SELECT ('"' || table_schema || '"."' || table_name || '"') AS tablename FROM information_schema.tables WHERE table_name = 'kind') AS subquery;
