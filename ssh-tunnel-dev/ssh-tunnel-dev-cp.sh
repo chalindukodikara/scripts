@@ -4,9 +4,8 @@
 # Please read https://docs.google.com/document/d/10u9AFnb52TR6wNSg_Z82TAjayDjJ7JYnmZmwHoqbxR0/edit#heading=h.hyo5f6n0qu4t before using this script.
 # Usage: ./ssh-dev-cp.sh [--debug] <username>
 
-BASTION_NAME=choreo-dev-cp-bastion
-BASTION_CERT_DIR=/tmp/${BASTION_NAME}
-BASTION_HOSTNAME=choreo-dev-cp-hub-bastion
+BASTION_HOSTNAME=choreo-dev-cp-hub-bastion-001
+BASTION_CERT_DIR=/tmp/${BASTION_HOSTNAME}
 
 AZ_SUBSCRIPTION=choreo-dev-hub-001
 AZ_CLI_EXTRA_ARGS=""
@@ -17,7 +16,7 @@ SSH_CERTIFICATE=${BASTION_CERT_DIR}/id_rsa-aadcert.pub
 SSH_BASTION_TUNNEL_HOST_KUBECTL=localhost
 SSH_BASTION_TUNNEL_PORT_KUBECTL=50222
 SSH_TUNNEL_HOST_KUBECTL=0.0.0.0
-SSH_TUNNEL_PORT_KUBECTL=8118
+SSH_TUNNEL_PORT_KUBECTL=3128
 
 SSH_BASTION_TUNNEL_HOST_MSSQL=localhost
 SSH_BASTION_TUNNEL_PORT_MSSQL=50223
@@ -28,6 +27,11 @@ SSH_BASTION_TUNNEL_HOST_MONGO_DB=localhost
 SSH_BASTION_TUNNEL_PORT_MONGO_DB=50224
 SSH_TUNNEL_HOST_MONGO_DB=0.0.0.0
 SSH_TUNNEL_PORT_MONGO_DB=27017
+
+SSH_BASTION_TUNNEL_HOST_POSTGRESQL=localhost
+SSH_BASTION_TUNNEL_PORT_POSTGRESQL=50225
+SSH_TUNNEL_HOST_POSTGRESQL=0.0.0.0
+SSH_TUNNEL_PORT_POSTGRESQL=5435
 
 SSH_CLI_EXTRA_ARGS=""
 
@@ -102,7 +106,7 @@ fi
 # Tunnel to the bastion for Kubectl in background
 echo "Creating bastion tunnel for Kubectl..."
 az network bastion tunnel --name "choreo-dev-bastion-host" --resource-group "choreo-dev-hub-network-rg" \
-    --target-resource-id "/subscriptions/7b752720-628c-42fd-8c1d-14b216d7c520/resourceGroups/choreo-dev-hub-network-rg/providers/Microsoft.Compute/virtualMachines/choreo-dev-cp-hub-bastion" \
+    --target-resource-id "/subscriptions/7b752720-628c-42fd-8c1d-14b216d7c520/resourceGroups/choreo-dev-hub-network-rg/providers/Microsoft.Compute/virtualMachines/${BASTION_HOSTNAME}" \
     --subscription choreo-dev-hub-001 --resource-port 22 --port ${SSH_BASTION_TUNNEL_PORT_KUBECTL} ${AZ_CLI_EXTRA_ARGS} &
 PID_BASTION_TUNNEL_KUBECTL=$!
 
@@ -112,10 +116,10 @@ wait_for_tunnel_port "Kubectl" "bastion" "${SSH_BASTION_TUNNEL_HOST_KUBECTL}" "$
 
 # SSH Tunnel for Kubectl
 echo "Creating SSH tunnel for kubectl..."
-ssh  -p ${SSH_BASTION_TUNNEL_PORT_KUBECTL} ${USERNAME}@wso2.com@choreo-dev-cp-hub-bastion  -i ${SSH_PRIVATE_KEY} \
+ssh  -p ${SSH_BASTION_TUNNEL_PORT_KUBECTL} ${USERNAME}@wso2.com@${BASTION_HOSTNAME}  -i ${SSH_PRIVATE_KEY} \
     -o "CertificateFile=${SSH_CERTIFICATE}" -o "StrictHostKeyChecking no" \
     -o 'ServerAliveInterval=30' -o 'ServerAliveCountMax=5' \
-    -L ${SSH_TUNNEL_HOST_KUBECTL}:${SSH_TUNNEL_PORT_KUBECTL}:127.0.0.1:8118 -N ${SSH_CLI_EXTRA_ARGS} &
+    -L ${SSH_TUNNEL_HOST_KUBECTL}:${SSH_TUNNEL_PORT_KUBECTL}:127.0.0.1:${SSH_TUNNEL_PORT_KUBECTL} -N ${SSH_CLI_EXTRA_ARGS} &
 PID_SSH_TUNNEL_KUBECTL=$!
 
 # Wait for SSH tunnel to be available for Kubectl
@@ -127,7 +131,7 @@ wait_for_tunnel_port "Kubectl" "SSH" "${SSH_TUNNEL_HOST_KUBECTL}" "${SSH_TUNNEL_
 # Tunnel to the bastion for MSSQL in background
 echo "Creating bastion tunnel for MSSQL..."
 az network bastion tunnel --name "choreo-dev-bastion-host" --resource-group "choreo-dev-hub-network-rg" \
-    --target-resource-id "/subscriptions/7b752720-628c-42fd-8c1d-14b216d7c520/resourceGroups/choreo-dev-hub-network-rg/providers/Microsoft.Compute/virtualMachines/choreo-dev-cp-hub-bastion" \
+    --target-resource-id "/subscriptions/7b752720-628c-42fd-8c1d-14b216d7c520/resourceGroups/choreo-dev-hub-network-rg/providers/Microsoft.Compute/virtualMachines/${BASTION_HOSTNAME}" \
     --subscription choreo-dev-hub-001 --resource-port 22 --port ${SSH_BASTION_TUNNEL_PORT_MSSQL} ${AZ_CLI_EXTRA_ARGS} &
 PID_BASTION_TUNNEL_MSSQL=$!
 
@@ -137,7 +141,7 @@ wait_for_tunnel_port "MSSQL" "bastion" "${SSH_BASTION_TUNNEL_HOST_MSSQL}" "${SSH
 
 # SSH Tunnel for MSSQL
 echo "Creating SSH tunnel for MSSQL..."
-ssh  -p ${SSH_BASTION_TUNNEL_PORT_MSSQL} ${USERNAME}@wso2.com@choreo-dev-cp-hub-bastion  -i ${SSH_PRIVATE_KEY} \
+ssh  -p ${SSH_BASTION_TUNNEL_PORT_MSSQL} ${USERNAME}@wso2.com@${BASTION_HOSTNAME}  -i ${SSH_PRIVATE_KEY} \
     -o "CertificateFile=${SSH_CERTIFICATE}" -o "StrictHostKeyChecking no" \
     -o 'ServerAliveInterval=30' -o 'ServerAliveCountMax=5' \
     -L ${SSH_TUNNEL_HOST_MSSQL}:${SSH_TUNNEL_PORT_MSSQL}:choreo-dev-ctrl-plane-mssql.database.windows.net:1433 -N ${SSH_CLI_EXTRA_ARGS} &
@@ -152,7 +156,7 @@ wait_for_tunnel_port "MSSQL" "SSH" "${SSH_TUNNEL_HOST_MSSQL}" "${SSH_TUNNEL_PORT
 # Tunnel to the bastion for MongoDB in background
 echo "Creating bastion tunnel for MongoDB..."
 az network bastion tunnel --name "choreo-dev-bastion-host" --resource-group "choreo-dev-hub-network-rg" \
-    --target-resource-id "/subscriptions/7b752720-628c-42fd-8c1d-14b216d7c520/resourceGroups/choreo-dev-hub-network-rg/providers/Microsoft.Compute/virtualMachines/choreo-dev-cp-hub-bastion" \
+    --target-resource-id "/subscriptions/7b752720-628c-42fd-8c1d-14b216d7c520/resourceGroups/choreo-dev-hub-network-rg/providers/Microsoft.Compute/virtualMachines/${BASTION_HOSTNAME}" \
     --subscription choreo-dev-hub-001 --resource-port 22 --port ${SSH_BASTION_TUNNEL_PORT_MONGO_DB} ${AZ_CLI_EXTRA_ARGS} &
 PID_BASTION_TUNNEL_MONGO_DB=$!
 
@@ -162,7 +166,7 @@ wait_for_tunnel_port "MongoDB" "bastion" "${SSH_BASTION_TUNNEL_HOST_MONGO_DB}" "
 
 # SSH Tunnel for MongoDB
 echo "Creating SSH tunnel for MongoDB..."
-ssh  -p ${SSH_BASTION_TUNNEL_PORT_MONGO_DB} ${USERNAME}@wso2.com@choreo-dev-cp-hub-bastion  -i ${SSH_PRIVATE_KEY} \
+ssh  -p ${SSH_BASTION_TUNNEL_PORT_MONGO_DB} ${USERNAME}@wso2.com@${BASTION_HOSTNAME}  -i ${SSH_PRIVATE_KEY} \
     -o "CertificateFile=${SSH_CERTIFICATE}" -o "StrictHostKeyChecking no" \
     -o 'ServerAliveInterval=30' -o 'ServerAliveCountMax=5' \
     -L ${SSH_TUNNEL_HOST_MONGO_DB}:${SSH_TUNNEL_PORT_MONGO_DB}:pl-1-eastus2-azure.hu3zq.mongodb.net:1025 -N ${SSH_CLI_EXTRA_ARGS} &
@@ -170,6 +174,30 @@ PID_SSH_TUNNEL_MONGO_DB=$!
 
 # Wait for SSH tunnel to be available for MongoDB
 wait_for_tunnel_port "MongoDB" "SSH" "${SSH_TUNNEL_HOST_MONGO_DB}" "${SSH_TUNNEL_PORT_MONGO_DB}"
+
+# ================= SSH Tunneling for PostgreSQL =================
+
+# Tunnel to the bastion for PostgreSQL in background
+echo "Creating bastion tunnel for PostgreSQL..."
+az network bastion tunnel --name "choreo-dev-bastion-host" --resource-group "choreo-dev-hub-network-rg" \
+    --target-resource-id "/subscriptions/7b752720-628c-42fd-8c1d-14b216d7c520/resourceGroups/choreo-dev-hub-network-rg/providers/Microsoft.Compute/virtualMachines/${BASTION_HOSTNAME}" \
+    --subscription choreo-dev-hub-001 --resource-port 22 --port ${SSH_BASTION_TUNNEL_PORT_POSTGRESQL} ${AZ_CLI_EXTRA_ARGS} &
+PID_BASTION_TUNNEL_MONGO_DB=$!
+
+# Wait for bastion tunnel to be available for PostgreSQL
+wait_for_tunnel_port "PostgreSQL" "bastion" "${SSH_BASTION_TUNNEL_HOST_POSTGRESQL}" "${SSH_BASTION_TUNNEL_PORT_POSTGRESQL}"
+
+
+# SSH Tunnel for PostgreSQL
+echo "Creating SSH tunnel for PostgreSQL..."
+ssh  -p ${SSH_BASTION_TUNNEL_PORT_POSTGRESQL} ${USERNAME}@wso2.com@${BASTION_HOSTNAME}  -i ${SSH_PRIVATE_KEY} \
+    -o "CertificateFile=${SSH_CERTIFICATE}" -o "StrictHostKeyChecking no" \
+    -o 'ServerAliveInterval=30' -o 'ServerAliveCountMax=5' \
+    -L ${SSH_TUNNEL_HOST_POSTGRESQL}:${SSH_TUNNEL_PORT_POSTGRESQL}:postgresql-choreo-dev-eastus2-api-001.postgres.database.azure.com:5432 -N ${SSH_CLI_EXTRA_ARGS} &
+PID_SSH_TUNNEL_POSTGRESQL=$!
+
+# Wait for SSH tunnel to be available for PostgreSQL
+wait_for_tunnel_port "PostgreSQL" "SSH" "${SSH_TUNNEL_HOST_POSTGRESQL}" "${SSH_TUNNEL_PORT_POSTGRESQL}"
 
 # ================= Cleanup =================
 
@@ -183,4 +211,4 @@ trap cleanup EXIT
 echo "Press Ctrl+C to exit the script"
 
 # Wait for background process to complete
-wait ${PID_SSH_TUNNEL_KUBECTL} ${PID_BASTION_TUNNEL_KUBECTL} ${PID_SSH_TUNNEL_MSSQL} ${PID_BASTION_TUNNEL_MSSQL} ${PID_SSH_TUNNEL_MONGO_DB} ${PID_BASTION_TUNNEL_MONGO_DB}
+wait ${PID_SSH_TUNNEL_KUBECTL} ${PID_BASTION_TUNNEL_KUBECTL} ${PID_SSH_TUNNEL_MSSQL} ${PID_BASTION_TUNNEL_MSSQL} ${PID_SSH_TUNNEL_MONGO_DB} ${PID_BASTION_TUNNEL_MONGO_DB} ${PID_SSH_TUNNEL_POSTGRESQL}
